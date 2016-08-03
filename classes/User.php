@@ -35,7 +35,7 @@ namespace dk\lightsaber\milage;
 		/***********
 		 * Standard Persistency methods for retrieving objects from the database
 		 ***********/		
-			public static function load($pdo, $id) {
+		public static function load($pdo, $id) {
 			return parent::_loadInstance($pdo, __CLASS__, $id);
 		}
 		
@@ -128,6 +128,16 @@ namespace dk\lightsaber\milage;
 			$bindings = array('id' => $this->getId());
 			
 			return Car::loadList($this->getPdo(), $where, $bindings);
+		}
+		
+		public function getExistingAuthKey() {
+			$where = "WHERE user_id = :user_id AND from_date < now() AND (to_date is null OR to_date > now())";
+			$binding = array('user_id' => $this->getId());
+			$authKey = AuthKeys::loadInstanceWhere($this->getPdo(), $where, $binding);
+			if($authKey != null) {
+				return $authKey->getAuthKey();
+			}
+			return NULL;
 		}
 		
 		/***********

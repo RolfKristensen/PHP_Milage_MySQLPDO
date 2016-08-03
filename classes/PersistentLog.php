@@ -3,7 +3,7 @@ namespace dk\lightsaber\milage;
 
 	Class PersistentLog {
 		public static $debug;
-		
+		public static $logger;
 		/**
 		 * Method used to send log messages
 		 * @param $msg

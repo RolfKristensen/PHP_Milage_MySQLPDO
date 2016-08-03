@@ -44,7 +44,7 @@ namespace dk\lightsaber\milage;
 		 * @param $id The id of the record that should be used for instantiating the object
 		 * @return and object of type $class, if the record exists in the database
 		 */
-		public static function _loadInstance($pdo, $class, $id) {
+		public static function _loadInstance(\PDO $pdo, $class, $id) {
 			$obj = new $class();
 			$where = 'WHERE ID = :id';
 			$binding = array('id' => $id);
@@ -52,9 +52,15 @@ namespace dk\lightsaber\milage;
 			return Persistent::_loadInstanceWhere($pdo, $class, $where, $binding);
 		}
 		
-		public static function _loadInstanceWhere($pdo, $class, $where, $binding) {
+		public static function _loadInstanceWhere(\PDO $pdo, $class, $where, $binding) {
 			$obj = NULL;
-			$stmt = $pdo->prepare("SELECT * FROM " . (new $class)->table . " $where");
+			$sql = "SELECT * FROM " . (new $class)->table . " $where";
+			if($binding != NULL) { 
+				PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] SQL: " . $sql, $binding);
+			} else {
+				PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] SQL: " . $sql);
+			}
+			$stmt = $pdo->prepare($sql);
 			$stmt->execute($binding);
 			$rowCount = $stmt->rowCount();
 			$stmt->setFetchMode(\PDO::FETCH_CLASS, $class);
@@ -62,13 +68,15 @@ namespace dk\lightsaber\milage;
 			if($rowCount == 1) {
 				$obj = $stmt->fetch(\PDO::FETCH_CLASS);
 			} else if ($rowCount == 0) {
-				PersistentLog::warn("Query didn't return any result");
+				PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] Query didn't return any result");
 			} else if ($rowCount > 1) {
 				$obj = $stmt->fetch(\PDO::FETCH_CLASS);
-				PersistentLog::warn("QInstance error... $rowCount records found in the database.");
+				PersistentLog::$logger->addInfo("[" . __CLASS__ . "." . __METHOD__ . "] Instance error... $rowCount records found in the database.");
 			}
-				
-			return $obj->setPersisted()->setPdo($pdo);
+			if($obj != NULL)
+				return $obj->setPersisted()->setPdo($pdo);
+			else 
+				return NULL;
 		}
 		
 		/*
@@ -77,59 +85,77 @@ namespace dk\lightsaber\milage;
 		 * @param $where The where clause (user must write 'where' as well
 		 * @return A list of the given object (if any results are available)
 		 */
-		public static function _loadList($pdo, $class, $where, $binding) {
+		public static function _loadList(\PDO $pdo, $class, $where, $binding) {
 			$list = array();
-			$stmt = $pdo->prepare("SELECT * FROM " . (new $class)->table . " $where");
+			$sql = "SELECT * FROM " . (new $class)->table . " $where";
+			if($binding != NULL) {
+				PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] SQL: " . $sql, $binding);
+			} else {
+				PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] SQL: " . $sql);
+			}
+			$stmt = $pdo->prepare($sql);
 			$stmt->execute($binding);
 			if($stmt->rowCount() > 0) {
 				$list = $stmt->fetchAll(\PDO::FETCH_CLASS, $class);
 			} else {
-				PersistentLog::warn("Query didn't return any result");
+				PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] Query didn't return any result");
 			}
-			foreach($list as $element) {
-				$element->setPersisted()->setPdo($pdo);
-			}
+			if($list != NULL)
+				foreach($list as $element) {
+					$element->setPersisted()->setPdo($pdo);
+				}
 			return $list;
 		}
 		
-		public static function _loadAll($pdo, $class) {
+		public static function _loadAll(\PDO $pdo, $class) {
 			$where = "WHERE 1=1";
 			return Persistent::_loadList($pdo, $class, $where, null);
 		}
 		
 		public function save() {
+			$binding = $this->getBinding();
+			foreach(array_keys($this->getBinding()) as $column) {
+				if(!isset($this->$column)) {
+					unset($binding[$column]);
+				}	
+			}
 			if($this->persist) {
 				// update
 				$sql = $this->makeUpdateSQL();
-				PersistentLog::info("[Persistent.save] Update SQL: " . $sql);
-				PersistentLog::error("[Persistent.save] Binding array: ". json_encode($this->getBinding()));
+				if($binding != NULL) {
+					PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] SQL: " . $sql, $binding);
+				} else {
+					PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] SQL: " . $sql);
+				}
 				if(PersistentConst::$doInserts) {
 					$stmt = $this->getPdo()->prepare($sql);
-					$stmt->execute($this->getBinding());
+					$stmt->execute(binding);
 					PersistentLog::error("[Persistent.save] Number of records changed: " . $stmt->rowCount());
 				} else {
-					error_log("Inserts/updates are disabled!");
+					PersistentLog::$logger->addInfo("[" . __CLASS__ . "." . __METHOD__ . "] Inserts/updates are disabled!");
 				}
 			} else {
 				// insert
 				$sql = $this->makeInsertSQL();
-				PersistentLog::info("[Persistent.save] Insert SQL: " . $sql);
-				$bindings = (array) $this->getBinding();
-				unset($bindings['id']);
-				PersistentLog::error("[Persistent.save] Binding array: ". json_encode($bindings));
+				unset($binding['id']);
+				if($binding != NULL) {
+					PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] SQL: " . $sql, $binding);
+				} else {
+					PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] SQL: " . $sql);
+				}
 				if(PersistentConst::$doInserts) {
 					$stmt = $this->getPdo()->prepare($sql);
-					$stmt->execute($bindings);
-					PersistentLog::error("[Persistent.save] Number of records changed: " . $stmt->rowCount());
+					$stmt->execute($binding);
+					PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] Number of records changed: " . $stmt->rowCount());
 						
 					if($stmt->rowCount()) {
 						$this->id = $this->getPdo()->lastInsertId();
 						$this->setPersisted();
 					} else {
-						PersistentLog::error("Error saving the object: $this->table to database.");
+						PersistentLog::$logger->addDebug("[" . __CLASS__ . "." . __METHOD__ . "] Error saving the object: $this->table to database.", $this);
 					}
 				} else {
-					error_log("Inserts/updates are disabled!");
+					PersistentLog::$logger->addInfo("[" . __CLASS__ . "." . __METHOD__ . "] Inserts/updates are disabled!");
 				}
 			}
 		}
@@ -157,7 +183,7 @@ namespace dk\lightsaber\milage;
 					} else if($this->meta_mapping_type[$column] == PersistentConst::DATE_TIME) {
 						$sql .= "$column = STR_TO_DATE(:$column,'" . PersistentConst::DATE_TIME_FORMAT . "')";
 					} else {
-						PersistentLog::error("Could not detect $column type... please check the type definition in meta_mapping_type");
+						PersistentLog::$logger->addError("[" . __CLASS__ . "." . __METHOD__ . "] Could not detect $column type... please check the type definition in meta_mapping_type", $this->getBinding());
 					}
 					$count++;
 				} else {
@@ -193,7 +219,7 @@ namespace dk\lightsaber\milage;
 						} else if($this->meta_mapping_type[$column] == PersistentConst::DATE_TIME) {
 							$sql_values .= "STR_TO_DATE(:$column,'" . PersistentConst::DATE_TIME_FORMAT . "')";
 						} else {
-							PersistentLog::error("Could not detect $variable type... please check the type definition in meta_mapping_type");
+							PersistentLog::$logger->addError("[" . __CLASS__ . "." . __METHOD__ . "] Could not detect $column type... please check the type definition in meta_mapping_type", $this->getBinding());
 						}
 						$count++;
 					}

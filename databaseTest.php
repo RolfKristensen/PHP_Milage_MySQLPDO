@@ -1,4 +1,5 @@
 <?php
+	require 'vendor/autoload.php';
 	require 'classes/Persistent.php';
 	require 'classes/PersistentConst.php';
 	require 'classes/PersistentLog.php';
@@ -6,12 +7,14 @@
 	require 'classes/Car.php';
 	require 'classes/User.php';
 	require 'classes/Milage.php';
+	require 'classes/AuthKeys.php';
 	
 	use dk\lightsaber\milage\Account;
 use dk\lightsaber\milage\PersistentLog;
 use dk\lightsaber\milage\Car;
 use dk\lightsaber\milage\User;
 use dk\lightsaber\milage\Milage;
+use dk\lightsaber\milage\AuthKeys;
 	$username = 'milage';
 	$password = 'egalim';
 	$dbname = 'lightsaber_dk';
@@ -21,6 +24,12 @@ use dk\lightsaber\milage\Milage;
 		$pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
 		$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 		PersistentLog::$debug=TRUE;
+		
+		$logger = new \Monolog\Logger('RESTTEST');
+		$file_handler = new \Monolog\Handler\StreamHandler("logs/RESTTEST.log");
+		$logger->pushHandler($file_handler);
+		
+		PersistentLog::$logger = $logger;
 /*
 		echo "load list<br/>";
 		$data = Account::loadList($pdo, "where id > :id", array('id'=>'12'));
@@ -73,12 +82,17 @@ use dk\lightsaber\milage\Milage;
 		$milage = Milage::load($pdo, 230);
 		PersistentLog::info("[databaseTest] : " . json_encode($milage));
 */
+/*
 		$user = User::logIn($pdo, 'rolf@lightsaber.dk', 'Password1');
 		$list = $user->getMilagesFromTo('2015-01-01','2016-01-01');
 		$list = $user->getMilages();
 		$list = $user->getMilagesLastXMonths(10);
 		$list = $user->getCars();
-		PersistentLog::info("[databaseTest] : <br/>" . json_encode($list));
+		PersistentLog::info("[".__FILE__."] : <br/>" . json_encode($list));
+*/
+		$user = AuthKeys::getValidUser($pdo, '1234-4321');
+		PersistentLog::info("[".__FILE__."] : <br/>" . json_encode($user));
+		
 		
 	} catch(PDOException $e) {
 		echo 'ERROR: ' . $e->getMessage();

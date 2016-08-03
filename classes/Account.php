@@ -51,8 +51,9 @@ namespace dk\lightsaber\milage;
 		 */
 		public function getUsers() {
 			if(!isset($this->users)) {
-				$where = "WHERE account_id=" . $this->getId();
-				$this->users = User::loadList($where);
+				$where = "WHERE account_id=:id";
+				$binding = array('id' => $this->getId());
+				$this->users = User::loadList($this->getPdo(), $where, $binding);
 			}
 			return $this->users;
 		}
